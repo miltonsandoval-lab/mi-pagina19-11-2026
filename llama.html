@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Llama</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #000;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .halo {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, #1b1b1b 0%, #050505 45%, #000 70%);
+  }
+  svg {
+    position: relative;
+    width: min(70vw, 520px);
+    height: auto;
+    filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.18));
+    animation: respirar 5s ease-in-out infinite;
+  }
+  @keyframes respirar {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.025); }
+  }
+</style>
+</head>
+<body>
+  <div class="halo"></div>
+
+  <svg viewBox="0 0 400 500" role="img" aria-label="Llama blanca sobre fondo negro">
+    <g fill="#ffffff">
+      <!-- cola -->
+      <path d="M108 268 Q82 262 78 238 Q96 250 112 250 Z"/>
+
+      <!-- patas traseras -->
+      <rect x="120" y="340" width="22" height="130" rx="10"/>
+      <rect x="158" y="345" width="22" height="125" rx="10"/>
+
+      <!-- cuerpo -->
+      <ellipse cx="185" cy="302" rx="92" ry="66"/>
+
+      <!-- patas delanteras -->
+      <rect x="212" y="345" width="22" height="125" rx="10"/>
+      <rect x="248" y="340" width="22" height="130" rx="10"/>
+
+      <!-- cuello -->
+      <path d="M232 270 C236 210 240 160 252 118 L292 126 C282 170 276 220 272 276 Z"/>
+
+      <!-- cabeza -->
+      <ellipse cx="278" cy="106" rx="38" ry="30"/>
+
+      <!-- hocico -->
+      <ellipse cx="312" cy="118" rx="24" ry="18"/>
+
+      <!-- orejas -->
+      <path d="M258 84 Q248 34 262 24 Q272 44 274 82 Z"/>
+      <path d="M288 80 Q288 30 302 26 Q306 50 300 82 Z"/>
+
+      <!-- flequillo -->
+      <ellipse cx="268" cy="82" rx="20" ry="12"/>
+    </g>
+
+    <!-- ojo -->
+    <circle cx="292" cy="98" r="4.5" fill="#000000"/>
+    <!-- nariz -->
+    <circle cx="326" cy="114" r="3" fill="#000000"/>
+  </svg>
+</body>
+</html>

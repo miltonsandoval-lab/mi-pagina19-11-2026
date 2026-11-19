@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gabinete Fuente de Laboratorio - 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #info {
+    position: absolute; top: 15px; left: 15px; z-index: 10;
+    background: rgba(30,30,50,0.9); padding: 12px 16px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4); font-size: 13px; color: #e0e0e0;
+    border: 1px solid #444;
+  }
+  #info h2 { font-size: 15px; margin-bottom: 6px; color: #4fc3f7; }
+  #info p { margin: 2px 0; color: #bbb; }
+  #controls {
+    position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 10;
+    background: rgba(30,30,50,0.9); padding: 10px 16px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4); font-size: 13px; color: #e0e0e0;
+    display: flex; gap: 12px; align-items: center; border: 1px solid #444;
+    flex-wrap: wrap; justify-content: center;
+  }
+  button {
+    background: #1976d2; color: white; border: none; padding: 6px 14px;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  button:hover { background: #1565c0; }
+  #loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 20px; color: #4fc3f7; z-index: 20;
+  }
+  .legend { font-size: 11px; color: #888; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div id="loading">Cargando gabinete 3D...</div>
+<div id="info">
+  <h2>⚡ Gabinete Fuente de Laboratorio</h2>
+  <p>🖱️ Arrastra para rotar · Scroll para zoom</p>
+  <p>⌨️ R: resetear vista</p>
+  <p class="legend">Diseño de referencia para fabricación</p>
+</div>
+<div id="controls">
+  <button id="btnFront">Vista frontal</button>
+  <button id="btnRear">Vista trasera</button>
+  <button id="btnTop">Vista superior</button>
+  <button id="btnWire">Modo malla: OFF</button>
+  <button id="btnReset">Resetear vista</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const loading = document.getElementById('loading');
+let wireframe = false;
+
+// Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.Fog(0x1a1a2e, 60, 150);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(40, 25, 40);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 15;
+controls.maxDistance = 120;
+controls.target.set(0, 8, 0);
+
+// Lights
+const hemiLight = new THREE.HemisphereLight(0x4fc3f7, 0x1a1a2e, 0.4);
+scene.add(hemiLight);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+keyLight.position.set(30, 50, 30);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.width = 2048;
+keyLight.shadow.mapSize.height = 2048;
+keyLight.shadow.camera.near = 0.5;
+keyLight.shadow.camera.far = 200;
+keyLight.shadow.camera.left = -40;
+keyLight.shadow.camera.right = 40;
+keyLight.shadow.camera.top = 40;
+keyLight.shadow.camera.bottom = -40;
+scene.add(keyLight);
+
+const fill = new THREE.DirectionalLight(0x4fc3f7, 0.25);
+fill.position.set(-20, 15, -20);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xff9800, 0.2);
+rim.position.set(0, 10, -40);
+scene.add(rim);
+
+// Materials
+const chassisMat = new THREE.MeshStandardMaterial({
+  color: 0x2c2c2c, roughness: 0.4, metalness: 0.85
+});
+const chassisLight = new THREE.MeshStandardMaterial({
+  color: 0x3a3a3a, roughness: 0.5, metalness: 0.7
+});
+const frontPanelMat = new THREE.MeshStandardMaterial({
+  color: 0x1e1e1e, roughness: 0.3, metalness: 0.6
+});
+const displayMat = new THREE.MeshStandardMaterial({
+  color: 0x00e676, roughness: 0.2, metalness: 0.1,
+  emissive: 0x00e676, emissiveIntensity: 0.3
+});
+const knobMat = new THREE.MeshStandardMaterial({
+  color: 0x555555, roughness: 0.3, metalness: 0.9
+});
+const knobBlue = new THREE.MeshStandardMaterial({
+  color: 0x1976d2, roughness: 0.3, metalness: 0.9
+});
+const knobRed = new THREE.MeshStandardMaterial({
+  color: 0xd32f2f, roughness: 0.3, metalness: 0.9
+});
+const terminalRed = new THREE.MeshStandardMaterial({
+  color: 0xd32f2f, roughness: 0.3, metalness: 0.8
+});
+const terminalBlack = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a, roughness: 0.3, metalness: 0.8
+});
+const terminalGreen = new THREE.MeshStandardMaterial({
+  color: 0x388e3c, roughness: 0.3, metalness: 0.8
+});
+const screenMat = new THREE.MeshStandardMaterial({
+  color: 0x0a0a0a, roughness: 0.1, metalness: 0.3
+});
+const ventMat = new THREE.MeshStandardMaterial({
+  color: 0x222222, roughness: 0.6, metalness: 0.5
+});
+const rubberMat = new THREE.MeshStandardMaterial({
+  color: 0x111111, roughness: 0.9, metalness: 0
+});
+const labelMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff, roughness: 0.5, metalness: 0.1
+});
+const acInputMat = new THREE.MeshStandardMaterial({
+  color: 0x333333, roughness: 0.4, metalness: 0.7
+});
+const handleMat = new THREE.MeshStandardMaterial({
+  color: 0x444444, roughness: 0.3, metalness: 0.9
+});
+
+// Dimensions (cm, scaled /10 for scene units)
+const W = 3.2;   // width  (32cm)
+const H = 1.6;   // height (16cm)
+const D = 2.6;   // depth  (26cm)
+const T = 0.08;  // wall thickness
+
+const psuGroup = new THREE.Group();
+scene.add(psuGroup);
+
+// === MAIN CHASSIS ===
+// Bottom plate
+const bottom = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), chassisMat);
+bottom.position.y = T/2;
+bottom.castShadow = true;
+bottom.receiveShadow = true;
+psuGroup.add(bottom);
+
+// Top plate
+const top = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), chassisMat);
+top.position.y = H - T/2;
+top.castShadow = true;
+psuGroup.add(top);
+
+// Left side
+const left = new THREE.Mesh(new THREE.BoxGeometry(T, H, D), chassisMat);
+left.position.set(-W/2 + T/2, H/2, 0);
+left.castShadow = true;
+psuGroup.add(left);
+
+// Right side
+const right = new THREE.Mesh(new THREE.BoxGeometry(T, H, D), chassisMat);
+right.position.set(W/2 - T/2, H/2, 0);
+right.castShadow = true;
+psuGroup.add(right);
+
+// Back panel
+const back = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), chassisLight);
+back.position.set(0, H/2, -D/2 + T/2);
+back.castShadow = true;
+psuGroup.add(back);
+
+// Front panel
+const front = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), frontPanelMat);
+front.position.set(0, H/2, D/2 - T/2);
+front.castShadow = true;
+psuGroup.add(front);
+
+// === FRONT PANEL DETAILS ===
+const fp = new THREE.Group();
+fp.position.set(0, 0, D/2 - T/2 + 0.01);
+psuGroup.add(fp);
+
+// Display (LCD screen)
+const display = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.02), screenMat);
+display.position.set(0, 1.15, 0.01);
+display.castShadow = true;
+fp.add(display);
+
+// Display glow (green digits area)
+const displayGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), displayMat);
+displayGlow.position.set(0, 1.15, 0.02);
+fp.add(displayGlow);
+
+// Display text placeholders (small boxes representing digits)
+for (let i = 0; i < 4; i++) {
+  const digit = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.01), labelMat);
+  digit.position.set(-0.5 + i * 0.32, 1.15, 0.025);
+  fp.add(digit);
+}
+// Decimal point
+const dot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), labelMat);
+dot.position.set(0.15, 1.05, 0.025);
+fp.add(dot);
+
+// Labels under display
+const label1 = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.12), labelMat);
+label1.position.set(-0.4, 0.85, 0.02);
+fp.add(label1);
+const label2 = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.12), labelMat);
+label2.position.set(0.4, 0.85, 0.02);
+fp.add(label2);
+
+// Knobs (voltage and current)
+// Voltage knob (left)
+const voltKnobBase = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.12, 32), knobBlue);
+voltKnobBase.position.set(-0.9, 0.55, 0.02);
+voltKnobBase.rotation.x = Math.PI / 2;
+fp.add(voltKnobBase);
+const voltKnobTop = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.08, 32), knobMat);
+voltKnobTop.position.set(-0.9, 0.55, 0.08);
+voltKnobTop.rotation.x = Math.PI / 2;
+fp.add(voltKnobTop);
+// Knob indicator line
+const voltLine = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, 0.02), labelMat);
+voltLine.position.set(-0.9, 0.55, 0.13);
+fp.add(voltLine);
+
+// Current knob (right)
+const currKnobBase = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.12, 32), knobRed);
+currKnobBase.position.set(0.9, 0.55, 0.02);
+currKnobBase.rotation.x = Math.PI / 2;
+fp.add(currKnobBase);
+const currKnobTop = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.08, 32), knobMat);
+currKnobTop.position.set(0.9, 0.55, 0.08);
+currKnobTop.rotation.x = Math.PI / 2;
+fp.add(currKnobTop);
+const currLine = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, 0.02), labelMat);
+currLine.position.set(0.9, 0.55, 0.13);
+fp.add(currLine);
+
+// Fine adjustment knobs (smaller)
+const fineVolt = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 24), knobBlue);
+fineVolt.position.set(-0.9, 0.15, 0.02);
+fineVolt.rotation.x = Math.PI / 2;
+fp.add(fineVolt);
+const fineCurr = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 24), knobRed);
+fineCurr.position.set(0.9, 0.15, 0.02);
+fineCurr.rotation.x = Math.PI / 2;
+fp.add(fineCurr);
+
+// Output terminals (binding posts) - bottom center
+const termSpacing = 0.5;
+const termY = -0.35;
+const termZ = 0.02;
+// Red (+)
+const termRedBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.15, 24), terminalRed);
+termRedBase.position.set(-termSpacing, termY, termZ);
+termRedBase.rotation.x = Math.PI / 2;
+fp.add(termRedBase);
+const termRedTop = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.12, 24), terminalRed);
+termRedTop.position.set(-termSpacing, termY, termZ + 0.12);
+termRedTop.rotation.x = Math.PI / 2;
+fp.add(termRedTop);
+// Black (-)
+const termBlackBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.15, 24), terminalBlack);
+termBlackBase.position.set(0, termY, termZ);
+termBlackBase.rotation.x = Math.PI / 2;
+fp.add(termBlackBase);
+const termBlackTop = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.12, 24), terminalBlack);
+termBlackTop.position.set(0, termY, termZ + 0.12);
+termBlackTop.rotation.x = Math.PI / 2;
+fp.add(termBlackTop);
+// Green (GND)
+const termGreenBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.15, 24), terminalGreen);
+termGreenBase.position.set(termSpacing, termY, termZ);
+termGreenBase.rotation.x = Math.PI / 2;
+fp.add(termGreenBase);
+const termGreenTop = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.12, 24), terminalGreen);
+termGreenTop.position.set(termSpacing, termY, termZ + 0.12);
+termGreenTop.rotation.x = Math.PI / 2;
+fp.add(termGreenTop);
+
+// Terminal labels
+const lblRed = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.1), labelMat);
+lblRed.position.set(-termSpacing, termY - 0.35, 0.02);
+fp.add(lblRed);
+const lblBlack = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.1), labelMat);
+lblBlack.position.set(0, termY - 0.35, 0.02);
+fp.add(lblBlack);
+const lblGreen = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.1), labelMat);
+lblGreen.position.set(termSpacing, termY - 0.35, 0.02);
+fp.add(lblGreen);
+
+// Power switch
+const powerSwitch = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.12, 0.08), knobMat);
+powerSwitch.position.set(1.2, 1.15, 0.02);
+fp.add(powerSwitch);
+const powerLED = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12),
+  new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 }));
+powerLED.position.set(1.2, 1.0, 0.02);
+fp.add(powerLED);
+
+// === REAR PANEL DETAILS ===
+const rp = new THREE.Group();
+rp.position.set(0, 0, -D/2 + T/2 - 0.01);
+psuGroup.add(rp);
+
+// AC input socket (IEC C14)
+const acSocket = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.35, 0.15), acInputMat);
+acSocket.position.set(0, 0.5, -0.01);
+rp.add(acSocket);
+// Socket holes
+for (let i = 0; i < 3; i++) {
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.2, 12), new THREE.MeshStandardMaterial({ color: 0x000000 }));
+  hole.position.set(-0.15 + i * 0.15, 0.5, -0.05);
+  hole.rotation.x = Math.PI / 2;
+  rp.add(hole);
+}
+
+// Fuse holder
+const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 16), acInputMat);
+fuse.position.set(1.0, 0.5, -0.01);
+fuse.rotation.z = Math.PI / 2;
+rp.add(fuse);
+
+// Cooling fan (on back or side) - let's put on back
+const fanHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.1, 32), ventMat);
+fanHousing.position.set(-1.0, 1.0, -0.01);
+fanHousing.rotation.x = Math.PI / 2;
+rp.add(fanHousing);
+// Fan blades
+const fanBlade = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.1), new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8 }));
+fanBlade.position.set(-1.0, 1.0, -0.05);
+rp.add(fanBlade);
+const fanBlade2 = fanBlade.clone();
+fanBlade2.rotation.z = Math.PI / 2;
+rp.add(fanBlade2);
+
+// Vent grille on right side
+const sideVent = new THREE.Group();
+sideVent.position.set(W/2 - T/2 + 0.01, H/2, 0);
+psuGroup.add(sideVent);
+for (let i = 0; i < 8; i++) {
+  const slit = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.08, 1.8), ventMat);
+  slit.position.set(0, -0.5 + i * 0.18, 0);
+  sideVent.add(slit);
+}
+
+// === TOP HANDLE ===
+const handleBar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.25), handleMat);
+handleBar.position.set(0, H + 0.15, 0);
+handleBar.castShadow = true;
+psuGroup.add(handleBar);
+const handleLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), handleMat);
+handleLeft.position.set(-0.5, H + 0.0, 0);
+psuGroup.add(handleLeft);
+const handleRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), handleMat);
+handleRight.position.set(0.5, H + 0.0, 0);
+psuGroup.add(handleRight);
+
+// === RUBBER FEET ===
+const footPositions = [
+  [-W/2 + 0.3, 0, -D/2 + 0.3],
+  [W/2 - 0.3, 0, -D/2 + 0.3],
+  [-W/2 + 0.3, 0, D/2 - 0.3],
+  [W/2 - 0.3, 0, D/2 - 0.3],
+];
+footPositions.forEach(p => {
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.1, 16), rubberMat);
+  foot.position.set(p[0], -0.05, p[2]);
+  psuGroup.add(foot);
+});
+
+// === GROUND / TABLE ===
+const table = new THREE.Mesh(new THREE.BoxGeometry(6, 0.1, 4), new THREE.MeshStandardMaterial({ color: 0x37474f, roughness: 0.6, metalness: 0.3 }));
+table.position.y = -0.15;
+table.receiveShadow = true;
+scene.add(table);
+
+// Backdrop wall
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(20, 12), new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.9 }));
+wall.position.set(0, 5, -8);
+wall.receiveShadow = true;
+scene.add(wall);
+
+// === LABELS (text via simple planes with color) ===
+// Voltage label
+const vLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.12), new THREE.MeshStandardMaterial({ color: 0x1976d2 }));
+vLabel.position.set(-0.9, 0.85, 0.02);
+fp.add(vLabel);
+// Current label
+const cLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.12), new THREE.MeshStandardMaterial({ color: 0xd32f2f }));
+cLabel.position.set(0.9, 0.85, 0.02);
+fp.add(cLabel);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// View buttons
+function setView(pos, target) {
+  camera.position.set(...pos);
+  controls.target.set(...target);
+  controls.update();
+}
+document.getElementById('btnFront').addEventListener('click', () => setView([0, 8, 25], [0, 8, 0]));
+document.getElementById('btnRear').addEventListener('click', () => setView([0, 8, -25], [0, 8, 0]));
+document.getElementById('btnTop').addEventListener('click', () => setView([0, 40, 0.1], [0, 8, 0]));
+document.getElementById('btnReset').addEventListener('click', () => setView([40, 25, 40], [0, 8, 0]));
+document.getElementById('btnWire').addEventListener('click', (e) => {
+  wireframe = !wireframe;
+  e.target.textContent = 'Modo malla: ' + (wireframe ? 'ON' : 'OFF');
+  scene.traverse((o) => {
+    if (o.isMesh && o.material) {
+      if (Array.isArray(o.material)) o.material.forEach(m => m.wireframe = wireframe);
+      else o.material.wireframe = wireframe;
+    }
+  });
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') setView([40, 25, 40], [0, 8, 0]);
+});
+
+loading.style.display = 'none';
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

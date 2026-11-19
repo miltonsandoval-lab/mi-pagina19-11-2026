@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gabinete Fuente XY6020 - 3D (según DXF)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #info {
+    position: absolute; top: 15px; left: 15px; z-index: 10;
+    background: rgba(30,30,50,0.9); padding: 12px 16px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4); font-size: 13px; color: #e0e0e0;
+    border: 1px solid #444; max-width: 320px;
+  }
+  #info h2 { font-size: 15px; margin-bottom: 6px; color: #4fc3f7; }
+  #info p { margin: 2px 0; color: #bbb; }
+  #info .dim { color: #81c784; font-family: monospace; font-size: 12px; }
+  #controls {
+    position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 10;
+    background: rgba(30,30,50,0.9); padding: 10px 16px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4); font-size: 12px; color: #e0e0e0;
+    display: flex; gap: 8px; align-items: center; border: 1px solid #444;
+    flex-wrap: wrap; justify-content: center;
+  }
+  button {
+    background: #1976d2; color: white; border: none; padding: 5px 12px;
+    border-radius: 6px; cursor: pointer; font-size: 11px;
+  }
+  button:hover { background: #1565c0; }
+  button.active { background: #0d47a1; }
+  #loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 20px; color: #4fc3f7; z-index: 20;
+  }
+  #legend {
+    position: absolute; top: 15px; right: 15px; z-index: 10;
+    background: rgba(30,30,50,0.9); padding: 10px 14px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4); font-size: 11px; color: #bbb;
+    border: 1px solid #444; max-width: 220px;
+  }
+  #legend h3 { font-size: 12px; color: #4fc3f7; margin-bottom: 6px; }
+  .leg-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .leg-color { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #555; }
+</style>
+</head>
+<body>
+<div id="loading">Cargando gabinete 3D...</div>
+<div id="info">
+  <h2>⚡ Gabinete Fuente XY6020</h2>
+  <p class="dim">306 × 103 × 196 mm</p>
+  <p>🖱️ Arrastra para rotar · Scroll para zoom</p>
+  <p>⌨️ R: resetear vista · E: explotar</p>
+</div>
+<div id="legend">
+  <h3>Referencias</h3>
+  <div class="leg-item"><div class="leg-color" style="background:#2c2c2c"></div>Chasis (acero)</div>
+  <div class="leg-item"><div class="leg-color" style="background:#1e1e1e"></div>Panel frontal</div>
+  <div class="leg-item"><div class="leg-color" style="background:#00e676"></div>Display LCD</div>
+  <div class="leg-item"><div class="leg-color" style="background:#1976d2"></div>Perilla voltaje</div>
+  <div class="leg-item"><div class="leg-color" style="background:#d32f2f"></div>Borne + / perilla corr.</div>
+  <div class="leg-item"><div class="leg-color" style="background:#388e3c"></div>Borne GND</div>
+  <div class="leg-item"><div class="leg-color" style="background:#333"></div>Conector AC</div>
+</div>
+<div id="controls">
+  <button id="btnFront">Frontal</button>
+  <button id="btnRear">Trasera</button>
+  <button id="btnTop">Superior</button>
+  <button id="btnSide">Lateral</button>
+  <button id="btnExplode">Explotar: OFF</button>
+  <button id="btnWire">Malla: OFF</button>
+  <button id="btnReset">Reset</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const loading = document.getElementById('loading');
+let wireframe = false;
+let exploded = false;
+
+// Scale: 1 unit = 10mm (cm)
+const W = 30.6;  // width  (306mm)
+const H = 10.3;  // height (103mm)
+const D = 19.6;  // depth  (196mm)
+const T = 0.12;  // wall thickness (1.2mm)
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+scene.fog = new THREE.Fog(0xffffff, 150, 400);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(45, 25, 45);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 20;
+controls.maxDistance = 150;
+controls.target.set(0, H/2, 0);
+
+// Lights
+const hemi = new THREE.HemisphereLight(0x8fcfff, 0x2a2a3e, 0.7);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 1.8);
+key.position.set(30, 50, 30);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.near = 0.5; key.shadow.camera.far = 200;
+key.shadow.camera.left = -50; key.shadow.camera.right = 50;
+key.shadow.camera.top = 50; key.shadow.camera.bottom = -50;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0x4fc3f7, 0.4);
+fill.position.set(-20, 15, -20);
+scene.add(fill);
+const rim = new THREE.DirectionalLight(0xff9800, 0.3);
+rim.position.set(0, 10, -40);
+scene.add(rim);
+
+// Materials
+const chassisMat = new THREE.MeshStandardMaterial({ color: 0x2c2c2c, roughness: 0.4, metalness: 0.85 });
+const chassisLight = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, metalness: 0.7 });
+const frontMat = new THREE.MeshStandardMaterial({ color: 0x1e1e1e, roughness: 0.3, metalness: 0.6 });
+const displayMat = new THREE.MeshStandardMaterial({ color: 0x00e676, roughness: 0.2, metalness: 0.1, emissive: 0x00e676, emissiveIntensity: 0.4 });
+const screenMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.1, metalness: 0.3 });
+const knobBlue = new THREE.MeshStandardMaterial({ color: 0x1976d2, roughness: 0.3, metalness: 0.9 });
+const knobRed = new THREE.MeshStandardMaterial({ color: 0xd32f2f, roughness: 0.3, metalness: 0.9 });
+const knobGray = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.3, metalness: 0.9 });
+const termRed = new THREE.MeshStandardMaterial({ color: 0xd32f2f, roughness: 0.3, metalness: 0.8 });
+const termBlack = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.8 });
+const termGreen = new THREE.MeshStandardMaterial({ color: 0x388e3c, roughness: 0.3, metalness: 0.8 });
+const ventMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6, metalness: 0.5 });
+const acMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.7 });
+const rubberMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9, metalness: 0 });
+const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.1 });
+const xy6020Mat = new THREE.MeshStandardMaterial({ color: 0x1565c0, roughness: 0.4, metalness: 0.6 });
+
+// Main group
+const cabinet = new THREE.Group();
+scene.add(cabinet);
+
+// === CHASSIS ===
+// Bottom
+const bottom = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), chassisMat);
+bottom.position.set(0, T/2, 0);
+bottom.castShadow = true; bottom.receiveShadow = true;
+cabinet.add(bottom);
+// Top
+const top = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), chassisMat);
+top.position.set(0, H - T/2, 0);
+top.castShadow = true;
+cabinet.add(top);
+// Left side
+const left = new THREE.Mesh(new THREE.BoxGeometry(T, H, D), chassisMat);
+left.position.set(-W/2 + T/2, H/2, 0);
+left.castShadow = true;
+cabinet.add(left);
+// Right side
+const right = new THREE.Mesh(new THREE.BoxGeometry(T, H, D), chassisMat);
+right.position.set(W/2 - T/2, H/2, 0);
+right.castShadow = true;
+cabinet.add(right);
+// Back
+const back = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), chassisLight);
+back.position.set(0, H/2, -D/2 + T/2);
+back.castShadow = true;
+cabinet.add(back);
+// Front
+const front = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), frontMat);
+front.position.set(0, H/2, D/2 - T/2);
+front.castShadow = true;
+cabinet.add(front);
+
+// === FRONT PANEL DETAILS ===
+const fp = new THREE.Group();
+fp.position.set(0, 0, D/2 - T/2);
+cabinet.add(fp);
+
+// Display cutout area (LCD screen) - 85.5 x 40.5mm centered-ish
+// From DXF: (202.25,-70.25) to (287.75,-29.75) relative to panel origin (0,0 at top-left-ish)
+// Panel is 306 wide. Center of display: x = (202.25+287.75)/2 = 245, relative to panel center (153) = 92mm right
+// y: center = (-70.25-29.75)/2 = -50, relative to panel center (height 103/2=51.5) = -50+51.5 = 1.5mm from center
+// In scene coords: x = 92/10 = 9.2, y = (H/2) + 1.5/10 = 5.15+0.15 = 5.3 (approx)
+const dispW = 8.55, dispH = 4.05;
+const dispX = 9.2, dispY = 5.3;
+const display = new THREE.Mesh(new THREE.BoxGeometry(dispW, dispH, 0.05), screenMat);
+display.position.set(dispX, dispY, 0.01);
+fp.add(display);
+const displayGlow = new THREE.Mesh(new THREE.PlaneGeometry(dispW - 0.3, dispH - 0.3), displayMat);
+displayGlow.position.set(dispX, dispY, 0.02);
+fp.add(displayGlow);
+
+// Display digits (placeholder)
+for (let i = 0; i < 4; i++) {
+  const digit = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.02), whiteMat);
+  digit.position.set(dispX - 2.5 + i * 1.8, dispY, 0.025);
+  fp.add(digit);
+}
+const dot = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), whiteMat);
+dot.position.set(dispX + 0.5, dispY - 1.2, 0.025);
+fp.add(dot);
+
+// Two large holes Ø9mm (radius 4.5mm = 0.45) - from DXF circles at (31,-50) and (50,-50)
+// Relative to panel center: x = 31-153 = -122mm = -12.2, y = -50+51.5 = 1.5mm = 0.15
+// and x = 50-153 = -103mm = -10.3
+const hole1X = -12.2, hole2X = -10.3, holeY = 0.15;
+// These are likely for binding posts or knob mounting
+const h1 = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, T + 0.1, 24), termRed);
+h1.position.set(hole1X, holeY, 0.02);
+h1.rotation.x = Math.PI / 2;
+fp.add(h1);
+const h2 = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, T + 0.1, 24), termBlack);
+h2.position.set(hole2X, holeY, 0.02);
+h2.rotation.x = Math.PI / 2;
+fp.add(h2);
+
+// Two square holes 14×14mm (from DXF rectangles at (81,-57)→(95,-43) and (106,-57)→(120,-43))
+// Center1: (88, -50) → relative: x = 88-153 = -65mm = -6.5, y = -50+51.5 = 1.5mm = 0.15
+// Center2: (113, -50) → relative: x = 113-153 = -40mm = -4.0
+const sq1 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.1), knobGray);
+sq1.position.set(-6.5, 0.15, 0.02);
+fp.add(sq1);
+const sq2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.1), knobGray);
+sq2.position.set(-4.0, 0.15, 0.02);
+fp.add(sq2);
+
+// Knobs (voltage and current) - placed to the left of display
+const voltKnob = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.3, 32), knobBlue);
+voltKnob.position.set(-14.0, H/2, 0.15);
+voltKnob.rotation.x = Math.PI / 2;
+fp.add(voltKnob);
+const voltKnobTop = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 0.15, 32), knobGray);
+voltKnobTop.position.set(-14.0, H/2, 0.32);
+voltKnobTop.rotation.x = Math.PI / 2;
+fp.add(voltKnobTop);
+
+const currKnob = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.3, 32), knobRed);
+currKnob.position.set(-10.5, H/2, 0.15);
+currKnob.rotation.x = Math.PI / 2;
+fp.add(currKnob);
+const currKnobTop = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 0.15, 32), knobGray);
+currKnobTop.position.set(-10.5, H/2, 0.32);
+currKnobTop.rotation.x = Math.PI / 2;
+fp.add(currKnobTop);
+
+// Output terminals (binding posts) - bottom of front panel
+const termY = -H/2 + 1.5;
+const termSpacing = 2.5;
+const termRedPost = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.6, 24), termRed);
+termRedPost.position.set(-termSpacing, termY, 0.15);
+termRedPost.rotation.x = Math.PI / 2;
+fp.add(termRedPost);
+const termBlackPost = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.6, 24), termBlack);
+termBlackPost.position.set(0, termY, 0.15);
+termBlackPost.rotation.x = Math.PI / 2;
+fp.add(termBlackPost);
+const termGreenPost = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.6, 24), termGreen);
+termGreenPost.position.set(termSpacing, termY, 0.15);
+termGreenPost.rotation.x = Math.PI / 2;
+fp.add(termGreenPost);
+
+// Labels under terminals
+const lblR = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.4), whiteMat);
+lblR.position.set(-termSpacing, termY - 1.2, 0.02);
+fp.add(lblR);
+const lblB = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.4), whiteMat);
+lblB.position.set(0, termY - 1.2, 0.02);
+fp.add(lblB);
+const lblG = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.4), whiteMat);
+lblG.position.set(termSpacing, termY - 1.2, 0.02);
+fp.add(lblG);
+
+// Power switch
+const pwrSwitch = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 0.3), knobGray);
+pwrSwitch.position.set(W/2 - 3, H/2 + 2, 0.02);
+fp.add(pwrSwitch);
+const pwrLED = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12),
+  new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 }));
+pwrLED.position.set(W/2 - 3, H/2 + 1, 0.02);
+fp.add(pwrLED);
+
+// === REAR PANEL DETAILS ===
+const rp = new THREE.Group();
+rp.position.set(0, 0, -D/2 + T/2);
+cabinet.add(rp);
+
+// AC input (IEC C14) - 48×28mm cutout
+const acCutout = new THREE.Mesh(new THREE.BoxGeometry(4.8, 2.8, 0.2), acMat);
+acCutout.position.set(0, H/2, -0.05);
+rp.add(acCutout);
+// AC socket pins
+for (let i = 0; i < 3; i++) {
+  const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.3, 12), new THREE.MeshStandardMaterial({ color: 0x000000 }));
+  pin.position.set(-0.8 + i * 0.8, H/2, -0.12);
+  pin.rotation.x = Math.PI / 2;
+  rp.add(pin);
+}
+// Fuse holder
+const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.6, 16), acMat);
+fuse.position.set(8, H/2, -0.05);
+fuse.rotation.z = Math.PI / 2;
+rp.add(fuse);
+
+// Ventilation slots on rear (many small)
+for (let i = 0; i < 12; i++) {
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5.5, 0.05), ventMat);
+  slot.position.set(-12 + i * 1.2, H/2, -0.02);
+  rp.add(slot);
+}
+
+// === TOP PANEL (ventilation slots) ===
+const tp = new THREE.Group();
+tp.position.set(0, H, 0);
+cabinet.add(tp);
+// Top ventilation slots
+for (let i = 0; i < 8; i++) {
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 10.0), ventMat);
+  slot.position.set(-8 + i * 2.2, 0.01, 0);
+  tp.add(slot);
+}
+// Corner holes (mounting) - Ø3.4mm = 0.34
+const cornerHoles = [
+  [-W/2 + 0.5, D/2 - 0.5],
+  [W/2 - 0.5, D/2 - 0.5],
+  [-W/2 + 0.5, -D/2 + 0.5],
+  [W/2 - 0.5, -D/2 + 0.5],
+];
+cornerHoles.forEach(p => {
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, T + 0.1, 16), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+  hole.position.set(p[0], 0.01, p[1]);
+  hole.rotation.x = Math.PI / 2;
+  tp.add(hole);
+});
+
+// === SIDE PANELS (ventilation slots) ===
+// Left side
+const ls = new THREE.Group();
+ls.position.set(-W/2, H/2, 0);
+cabinet.add(ls);
+ls.rotation.y = Math.PI / 2;
+for (let i = 0; i < 6; i++) {
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5.5, 0.05), ventMat);
+  slot.position.set(-6 + i * 2.0, 0, 0);
+  ls.add(slot);
+}
+// Right side
+const rs = new THREE.Group();
+rs.position.set(W/2, H/2, 0);
+cabinet.add(rs);
+rs.rotation.y = Math.PI / 2;
+for (let i = 0; i < 6; i++) {
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5.5, 0.05), ventMat);
+  slot.position.set(-6 + i * 2.0, 0, 0);
+  rs.add(slot);
+}
+
+// === INTERNAL: XY6020 module (placeholder) ===
+const xy6020 = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 12), xy6020Mat);
+xy6020.position.set(0, 2, 0);
+xy6020.castShadow = true;
+cabinet.add(xy6020);
+// Heatsink on module
+const heatsink = new THREE.Mesh(new THREE.BoxGeometry(18, 1.5, 10), new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.3 }));
+heatsink.position.set(0, 3.5, 0);
+cabinet.add(heatsink);
+
+// === BASE MOUNTING HOLES (visual) ===
+// 4 corner screw holes on base
+const baseHoles = [
+  [-W/2 + 1.0, -D/2 + 1.0],
+  [W/2 - 1.0, -D/2 + 1.0],
+  [-W/2 + 1.0, D/2 - 1.0],
+  [W/2 - 1.0, D/2 - 1.0],
+];
+baseHoles.forEach(p => {
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, T + 0.1, 16), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+  hole.position.set(p[0], 0.01, p[1]);
+  hole.rotation.x = Math.PI / 2;
+  cabinet.add(hole);
+});
+
+// === RUBBER FEET ===
+const feet = [
+  [-W/2 + 1.5, -D/2 + 1.5],
+  [W/2 - 1.5, -D/2 + 1.5],
+  [-W/2 + 1.5, D/2 - 1.5],
+  [W/2 - 1.5, D/2 - 1.5],
+];
+feet.forEach(p => {
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.3, 16), rubberMat);
+  foot.position.set(p[0], -0.15, p[1]);
+  cabinet.add(foot);
+});
+
+// === GROUND ===
+const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+scene.add(ambient);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.6 }));
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.3;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// === EXPLODE LOGIC ===
+const originalPositions = new Map();
+cabinet.children.forEach((child, i) => {
+  originalPositions.set(child.uuid, child.position.clone());
+});
+
+function setExploded(state) {
+  exploded = state;
+  const factor = state ? 1 : 0;
+  cabinet.children.forEach((child) => {
+    const orig = originalPositions.get(child.uuid);
+    if (!orig) return;
+    // Move parts outward based on their position relative to center
+    const dir = orig.clone().sub(new THREE.Vector3(0, H/2, 0)).normalize();
+    const dist = state ? 8 : 0;
+    child.position.copy(orig).add(dir.multiplyScalar(dist * factor));
+  });
+  document.getElementById('btnExplode').textContent = 'Explotar: ' + (state ? 'ON' : 'OFF');
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// View buttons
+function setView(pos, target) {
+  camera.position.set(...pos);
+  controls.target.set(...target);
+  controls.update();
+}
+document.getElementById('btnFront').addEventListener('click', () => setView([0, H/2, D*2], [0, H/2, 0]));
+document.getElementById('btnRear').addEventListener('click', () => setView([0, H/2, -D*2], [0, H/2, 0]));
+document.getElementById('btnTop').addEventListener('click', () => setView([0, 60, 0.1], [0, H/2, 0]));
+document.getElementById('btnSide').addEventListener('click', () => setView([D*2, H/2, 0], [0, H/2, 0]));
+document.getElementById('btnReset').addEventListener('click', () => setView([45, 25, 45], [0, H/2, 0]));
+document.getElementById('btnExplode').addEventListener('click', () => setExploded(!exploded));
+document.getElementById('btnWire').addEventListener('click', (e) => {
+  wireframe = !wireframe;
+  e.target.textContent = 'Malla: ' + (wireframe ? 'ON' : 'OFF');
+  scene.traverse((o) => {
+    if (o.isMesh && o.material) {
+      if (Array.isArray(o.material)) o.material.forEach(m => m.wireframe = wireframe);
+      else o.material.wireframe = wireframe;
+    }
+  });
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') setView([45, 25, 45], [0, H/2, 0]);
+  if (e.key === 'e' || e.key === 'E') setExploded(!exploded);
+});
+
+loading.style.display = 'none';
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

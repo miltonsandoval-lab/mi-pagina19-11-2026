@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pixel Clock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  :root {
+    --bg: #0a0a14;
+    --panel: #14142a;
+    --accent: #ff5c8a;
+    --accent2: #5cffea;
+    --text: #f0f0ff;
+    --dim: #5a5a8a;
+    --grid: #1f1f3f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Press Start 2P', monospace;
+    image-rendering: pixelated;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: scan 8s linear infinite;
+  }
+
+  @keyframes scan {
+    0% { background-position: 0 0, 0 0; }
+    100% { background-position: 0 40px, 40px 0; }
+  }
+
+  /* Screensaver bouncer */
+  #bouncer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 120px;
+    height: auto;
+    image-rendering: pixelated;
+    z-index: 0;
+    pointer-events: none;
+    filter: drop-shadow(0 0 6px var(--accent));
+    border-radius: 14px;
+    display: none;
+  }
+  #bouncer.show { display: block; }
+
+  .wrapper {
+    text-align: center;
+    padding: 40px;
+    border: 4px solid var(--accent);
+    background: var(--panel);
+    border-radius: 28px;
+    box-shadow:
+      8px 8px 0 0 #000,
+      0 0 40px var(--accent);
+    position: relative;
+    z-index: 2;
+    overflow: hidden;
+  }
+
+  .wrapper::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 2px dashed var(--dim);
+    pointer-events: none;
+  }
+
+  .title {
+    font-size: 14px;
+    color: var(--accent2);
+    margin-bottom: 28px;
+    text-shadow: 2px 2px 0 #000;
+    letter-spacing: 2px;
+  }
+
+  .clock {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+    font-size: clamp(28px, 6vw, 64px);
+    line-height: 1;
+    text-shadow: 4px 4px 0 #000;
+  }
+
+  .clock .unit {
+    display: inline-block;
+    min-width: 2ch;
+    text-align: center;
+  }
+
+  .clock .hh { color: var(--accent); }
+  .clock .mm { color: var(--accent2); }
+  .clock .ss { color: var(--text); }
+  .clock .ms { color: var(--dim); font-size: 0.5em; vertical-align: top; margin-left: 4px; }
+
+  .sep {
+    color: var(--dim);
+    animation: blink 1s steps(2, start) infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.2; }
+  }
+
+  .date {
+    margin-top: 30px;
+    font-size: 12px;
+    color: var(--accent2);
+    text-shadow: 2px 2px 0 #000;
+    letter-spacing: 1px;
+  }
+
+  .footer {
+    margin-top: 24px;
+    font-size: 8px;
+    color: var(--dim);
+  }
+
+  .sound-btn, .ss-btn {
+    margin-top: 18px;
+    margin-right: 6px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: var(--text);
+    background: var(--bg);
+    border: 2px solid var(--accent2);
+    padding: 8px 12px;
+    cursor: pointer;
+    text-shadow: 1px 1px 0 #000;
+    box-shadow: 3px 3px 0 0 #000;
+    transition: transform 0.05s steps(1);
+  }
+  .sound-btn:active, .ss-btn:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 0 #000; }
+  .sound-btn.on, .ss-btn.on { border-color: var(--accent); color: var(--accent); }
+
+  .ss-panel {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    font-size: 8px;
+  }
+  .ss-panel input[type="file"] { display: none; }
+  .ss-panel label, .ss-panel button, .ss-panel input[type="text"], .ss-panel input[type="range"] {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+  }
+  .ss-panel input[type="text"] {
+    background: var(--bg);
+    border: 2px solid var(--dim);
+    color: var(--text);
+    padding: 6px;
+    width: 160px;
+  }
+  .ss-panel .small-btn {
+    background: var(--bg);
+    border: 2px solid var(--accent2);
+    color: var(--text);
+    padding: 6px 8px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 0 #000;
+  }
+  .ss-panel .small-btn:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 0 #000; }
+
+  .corner {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+  }
+  .corner.tl { top: -4px; left: -4px; }
+  .corner.tr { top: -4px; right: -4px; }
+  .corner.bl { bottom: -4px; left: -4px; }
+  .corner.br { bottom: -4px; right: -4px; }
+</style>
+</head>
+<body>
+  <img id="bouncer" src="bouncer.png" alt="screensaver" />
+
+  <div class="wrapper">
+    <div class="title">PIXEL CLOCK</div>
+    <div class="clock">
+      <span class="unit hh" id="hh">00</span>
+      <span class="sep">:</span>
+      <span class="unit mm" id="mm">00</span>
+      <span class="sep">:</span>
+      <span class="unit ss" id="ss">00</span>
+      <span class="unit ms" id="ms">.000</span>
+    </div>
+    <div class="date" id="date">---</div>
+    <button class="sound-btn" id="soundBtn" type="button">SOUND: OFF</button>
+    <button class="ss-btn" id="ssBtn" type="button">SS: OFF</button>
+    <div class="ss-panel">
+      <label class="small-btn" for="fileInput">CARGAR IMG</label>
+      <input type="file" id="fileInput" accept="image/*" />
+      <input type="text" id="urlInput" placeholder="URL de imagen" />
+      <button class="small-btn" id="urlBtn" type="button">OK</button>
+      <span>VEL</span>
+      <input type="range" id="speedRange" min="1" max="12" value="4" />
+    </div>
+    <div class="footer">BUENOS AIRES // LIVE</div>
+  </div>
+
+  <script>
+    const TZ = 'America/Argentina/Buenos_Aires';
+
+    const pad = (n, w = 2) => String(n).padStart(w, '0');
+
+    function buenosAiresParts(d) {
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TZ,
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      const parts = fmt.formatToParts(d);
+      const get = (t) => parts.find(p => p.type === t).value;
+      return {
+        hh: get('hour'),
+        mm: get('minute'),
+        ss: get('second'),
+        ms: d.getMilliseconds()
+      };
+    }
+
+    function buenosAiresDate(d) {
+      const fmt = new Intl.DateTimeFormat('es-AR', {
+        timeZone: TZ,
+        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+      });
+      return fmt.format(d).toUpperCase();
+    }
+
+    // ---- Sound ----
+    let soundOn = false;
+    let audioCtx = null;
+    let lastSecond = null;
+
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function beep(freq = 880, dur = 0.06, vol = 0.08) {
+      if (!soundOn || !audioCtx) return;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'square';
+      o.frequency.value = freq;
+      g.gain.value = vol;
+      o.connect(g); g.connect(audioCtx.destination);
+      const t = audioCtx.currentTime;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t);
+      o.stop(t + dur);
+    }
+
+    const btn = document.getElementById('soundBtn');
+    btn.addEventListener('click', () => {
+      soundOn = !soundOn;
+      if (soundOn) { ensureAudio(); beep(660, 0.08, 0.1); }
+      btn.textContent = 'SOUND: ' + (soundOn ? 'ON' : 'OFF');
+      btn.classList.toggle('on', soundOn);
+    });
+
+    // ---- Screensaver bouncer ----
+    const bouncer = document.getElementById('bouncer');
+    const ssBtn = document.getElementById('ssBtn');
+    const fileInput = document.getElementById('fileInput');
+    const urlInput = document.getElementById('urlInput');
+    const urlBtn = document.getElementById('urlBtn');
+    const speedRange = document.getElementById('speedRange');
+
+    let ssOn = false;
+    let x = 40, y = 40;
+    let dx = 3, dy = 2.4;
+    let imgW = 120, imgH = 120;
+    let rafId = null;
+
+    function setBouncerSrc(src) {
+      bouncer.src = src;
+      bouncer.onload = () => {
+        const ratio = bouncer.naturalWidth / bouncer.naturalHeight || 1;
+        imgH = Math.round(imgW / ratio);
+        bouncer.style.width = imgW + 'px';
+        bouncer.style.height = imgH + 'px';
+        // keep inside viewport
+        x = Math.min(x, window.innerWidth - imgW);
+        y = Math.min(y, window.innerHeight - imgH);
+        if (x < 0) x = 0; if (y < 0) y = 0;
+      };
+    }
+
+    function updateSpeed() {
+      const v = Number(speedRange.value);
+      const mag = Math.hypot(dx, dy) || 1;
+      dx = (dx / mag) * v;
+      dy = (dy / mag) * v;
+      if (Math.abs(dx) < 0.5) dx = 0.5 * Math.sign(dx || 1);
+      if (Math.abs(dy) < 0.5) dy = 0.5 * Math.sign(dy || 1);
+    }
+    speedRange.addEventListener('input', updateSpeed);
+
+    function bounceStep() {
+      if (!ssOn) return;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      x += dx;
+      y += dy;
+      if (x <= 0) { x = 0; dx = Math.abs(dx); beepIfSound(440); }
+      if (x + imgW >= W) { x = W - imgW; dx = -Math.abs(dx); beepIfSound(440); }
+      if (y <= 0) { y = 0; dy = Math.abs(dy); beepIfSound(440); }
+      if (y + imgH >= H) { y = H - imgH; dy = -Math.abs(dy); beepIfSound(440); }
+      bouncer.style.transform = `translate(${x}px, ${y}px)`;
+      rafId = requestAnimationFrame(bounceStep);
+    }
+
+    function beepIfSound(f) {
+      if (soundOn) beep(f, 0.04, 0.05);
+    }
+
+    function startSS() {
+      if (!bouncer.src) return;
+      ssOn = true;
+      bouncer.classList.add('show');
+      ssBtn.textContent = 'SS: ON';
+      ssBtn.classList.add('on');
+      // reset pos
+      x = 40; y = 40;
+      updateSpeed();
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(bounceStep);
+    }
+    function stopSS() {
+      ssOn = false;
+      bouncer.classList.remove('show');
+      ssBtn.textContent = 'SS: OFF';
+      ssBtn.classList.remove('on');
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+
+    ssBtn.addEventListener('click', () => {
+      if (ssOn) stopSS(); else startSS();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      setBouncerSrc(url);
+      if (!ssOn) startSS();
+    });
+
+    urlBtn.addEventListener('click', () => {
+      const u = urlInput.value.trim();
+      if (!u) return;
+      setBouncerSrc(u);
+      if (!ssOn) startSS();
+    });
+
+    window.addEventListener('resize', () => {
+      if (x + imgW > window.innerWidth) x = window.innerWidth - imgW;
+      if (y + imgH > window.innerHeight) y = window.innerHeight - imgH;
+      if (x < 0) x = 0; if (y < 0) y = 0;
+    });
+
+    // Precargar imagen adjunta
+    setBouncerSrc('bouncer.png');
+    startSS();
+
+    // ---- Clock loop ----
+    function tick() {
+      const d = new Date();
+      const p = buenosAiresParts(d);
+      document.getElementById('hh').textContent = p.hh;
+      document.getElementById('mm').textContent = p.mm;
+      if (p.ss !== lastSecond) {
+        lastSecond = p.ss;
+        if (soundOn) beep(p.ss === '00' ? 1320 : 880, 0.05, 0.07);
+      }
+      document.getElementById('ss').textContent = p.ss;
+      document.getElementById('ms').textContent = '.' + pad(p.ms, 3);
+      document.getElementById('date').textContent = buenosAiresDate(d);
+    }
+
+    tick();
+    function loop() {
+      tick();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

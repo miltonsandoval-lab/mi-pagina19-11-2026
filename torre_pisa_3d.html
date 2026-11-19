@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torre Inclinada de Pisa - 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #87CEEB; }
+  #info {
+    position: absolute; top: 15px; left: 15px; z-index: 10;
+    background: rgba(255,255,255,0.85); padding: 12px 16px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 14px; color: #333;
+  }
+  #info h2 { font-size: 16px; margin-bottom: 6px; color: #5a3e2b; }
+  #info p { margin: 2px 0; }
+  #controls {
+    position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 10;
+    background: rgba(255,255,255,0.85); padding: 10px 16px; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 13px; color: #555;
+    display: flex; gap: 16px; align-items: center;
+  }
+  button {
+    background: #5a3e2b; color: white; border: none; padding: 6px 14px;
+    border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { background: #7a5a3b; }
+  #loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 20px; color: #5a3e2b; z-index: 20;
+  }
+</style>
+</head>
+<body>
+<div id="loading">Cargando modelo 3D...</div>
+<div id="info">
+  <h2>🗼 Torre Inclinada de Pisa</h2>
+  <p>🖱️ Arrastra para rotar · Scroll para zoom</p>
+  <p>⌨️ R: resetear vista</p>
+</div>
+<div id="controls">
+  <button id="btnLean">Inclinación: ON</button>
+  <button id="btnWire">Modo malla: OFF</button>
+  <button id="btnReset">Resetear vista</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const loading = document.getElementById('loading');
+let leanEnabled = true;
+let wireframe = false;
+
+// Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0x87CEEB, 80, 200);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(25, 20, 35);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+document.body.appendChild(renderer.domElement);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 10;
+controls.maxDistance = 120;
+controls.target.set(0, 25, 0);
+
+// Lights
+const hemiLight = new THREE.HemisphereLight(0xb1e1ff, 0x444422, 0.6);
+scene.add(hemiLight);
+
+const sun = new THREE.DirectionalLight(0xfff5e6, 1.4);
+sun.position.set(40, 60, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 200;
+sun.shadow.camera.left = -60;
+sun.shadow.camera.right = 60;
+sun.shadow.camera.top = 60;
+sun.shadow.camera.bottom = -60;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0xaaccff, 0.3);
+fill.position.set(-30, 20, -20);
+scene.add(fill);
+
+// Materials
+const marbleMat = new THREE.MeshStandardMaterial({
+  color: 0xe8dcc8, roughness: 0.75, metalness: 0.05
+});
+const marbleDark = new THREE.MeshStandardMaterial({
+  color: 0xd4c4a8, roughness: 0.8, metalness: 0.05
+});
+const stoneMat = new THREE.MeshStandardMaterial({
+  color: 0xc9b896, roughness: 0.85, metalness: 0.02
+});
+const grassMat = new THREE.MeshStandardMaterial({
+  color: 0x7ec850, roughness: 0.9, metalness: 0
+});
+const pathMat = new THREE.MeshStandardMaterial({
+  color: 0xd9c9a3, roughness: 0.9, metalness: 0
+});
+
+// Ground (plaza)
+const plaza = new THREE.Mesh(new THREE.CylinderGeometry(50, 50, 0.5, 64), pathMat);
+plaza.position.y = -0.25;
+plaza.receiveShadow = true;
+scene.add(plaza);
+
+const grass = new THREE.Mesh(new THREE.CylinderGeometry(90, 90, 0.3, 64), grassMat);
+grass.position.y = -0.6;
+grass.receiveShadow = true;
+scene.add(grass);
+
+// Tower group (will be tilted)
+const towerGroup = new THREE.Group();
+scene.add(towerGroup);
+
+const TOWER_RADIUS = 7.5;
+const LEAN_ANGLE = 0.069; // ~3.97 degrees
+
+function makeTower() {
+  // Clear
+  while (towerGroup.children.length) towerGroup.remove(towerGroup.children[0]);
+
+  // Base (solid cylinder)
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(TOWER_RADIUS, TOWER_RADIUS + 0.3, 3, 32),
+    marbleDark
+  );
+  base.position.y = 1.5;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  towerGroup.add(base);
+
+  // Arcade levels: 8 stories
+  const NUM_LEVELS = 8;
+  const LEVEL_HEIGHT = 5.2;
+  const COL_RADIUS = 0.25;
+
+  for (let i = 0; i < NUM_LEVELS; i++) {
+    const yBase = 3 + i * LEVEL_HEIGHT;
+    // Solid wall band
+    const band = new THREE.Mesh(
+      new THREE.CylinderGeometry(TOWER_RADIUS, TOWER_RADIUS, 0.6, 32),
+      marbleDark
+    );
+    band.position.y = yBase + 0.3;
+    band.castShadow = true;
+    towerGroup.add(band);
+
+    // Arcade ring (columns + arches)
+    const arcadeGroup = new THREE.Group();
+    arcadeGroup.position.y = yBase + 0.6 + (LEVEL_HEIGHT - 0.6) / 2;
+    const arcadeHeight = LEVEL_HEIGHT - 0.6;
+    const NUM_COLS = 15;
+    for (let c = 0; c < NUM_COLS; c++) {
+      const angle = (c / NUM_COLS) * Math.PI * 2;
+      const x = Math.cos(angle) * TOWER_RADIUS;
+      const z = Math.sin(angle) * TOWER_RADIUS;
+      // Column
+      const col = new THREE.Mesh(
+        new THREE.CylinderGeometry(COL_RADIUS, COL_RADIUS, arcadeHeight, 8),
+        marbleMat
+      );
+      col.position.set(x, 0, z);
+      col.castShadow = true;
+      arcadeGroup.add(col);
+
+      // Capital (small box on top of column)
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(COL_RADIUS * 2.6, 0.25, COL_RADIUS * 2.6),
+        marbleMat
+      );
+      cap.position.set(x, arcadeHeight / 2 - 0.15, z);
+      arcadeGroup.add(cap);
+    }
+    // Top architrave ring
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(TOWER_RADIUS, 0.18, 8, 48),
+      marbleDark
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = arcadeHeight / 2 - 0.05;
+    arcadeGroup.add(ring);
+
+    // Bottom architrave ring
+    const ring2 = new THREE.Mesh(
+      new THREE.TorusGeometry(TOWER_RADIUS, 0.18, 8, 48),
+      marbleDark
+    );
+    ring2.rotation.x = Math.PI / 2;
+    ring2.position.y = -arcadeHeight / 2 + 0.05;
+    arcadeGroup.add(ring2);
+
+    towerGroup.add(arcadeGroup);
+  }
+
+  // Belfry (top, slightly smaller)
+  const belfryBase = new THREE.Mesh(
+    new THREE.CylinderGeometry(TOWER_RADIUS - 0.5, TOWER_RADIUS, 2, 32),
+    marbleDark
+  );
+  belfryBase.position.y = 3 + NUM_LEVELS * LEVEL_HEIGHT + 1;
+  belfryBase.castShadow = true;
+  towerGroup.add(belfryBase);
+
+  // Belfry arcade (smaller columns)
+  const belfryArcade = new THREE.Group();
+  belfryArcade.position.y = 3 + NUM_LEVELS * LEVEL_HEIGHT + 2 + 2;
+  const belfryHeight = 4;
+  const NUM_BELLS = 12;
+  for (let c = 0; c < NUM_BELLS; c++) {
+    const angle = (c / NUM_BELLS) * Math.PI * 2;
+    const x = Math.cos(angle) * (TOWER_RADIUS - 0.5);
+    const z = Math.sin(angle) * (TOWER_RADIUS - 0.5);
+    const col = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.2, belfryHeight, 8),
+      marbleMat
+    );
+    col.position.set(x, 0, z);
+    col.castShadow = true;
+    belfryArcade.add(col);
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.2, 0.5),
+      marbleMat
+    );
+    cap.position.set(x, belfryHeight / 2 - 0.1, z);
+    belfryArcade.add(cap);
+  }
+  const belfryRing = new THREE.Mesh(
+    new THREE.TorusGeometry(TOWER_RADIUS - 0.5, 0.15, 8, 48),
+    marbleDark
+  );
+  belfryRing.rotation.x = Math.PI / 2;
+  belfryRing.position.y = belfryHeight / 2 - 0.05;
+  belfryArcade.add(belfryRing);
+  const belfryRing2 = new THREE.Mesh(
+    new THREE.TorusGeometry(TOWER_RADIUS - 0.5, 0.15, 8, 48),
+    marbleDark
+  );
+  belfryRing2.rotation.x = Math.PI / 2;
+  belfryRing2.position.y = -belfryHeight / 2 + 0.05;
+  belfryArcade.add(belfryRing2);
+  towerGroup.add(belfryArcade);
+
+  // Roof (conical-ish top)
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(TOWER_RADIUS - 0.3, 3, 32),
+    stoneMat
+  );
+  roof.position.y = 3 + NUM_LEVELS * LEVEL_HEIGHT + 2 + belfryHeight + 1.5;
+  roof.castShadow = true;
+  towerGroup.add(roof);
+
+  // Apply lean
+  if (leanEnabled) {
+    towerGroup.rotation.z = LEAN_ANGLE;
+  } else {
+    towerGroup.rotation.z = 0;
+  }
+}
+
+makeTower();
+
+// Decorative columns at base entrance (optional detail)
+// Simple shadow catcher already via plaza receiveShadow
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Button handlers
+document.getElementById('btnLean').addEventListener('click', (e) => {
+  leanEnabled = !leanEnabled;
+  e.target.textContent = 'Inclinación: ' + (leanEnabled ? 'ON' : 'OFF');
+  makeTower();
+});
+document.getElementById('btnWire').addEventListener('click', (e) => {
+  wireframe = !wireframe;
+  e.target.textContent = 'Modo malla: ' + (wireframe ? 'ON' : 'OFF');
+  scene.traverse((o) => {
+    if (o.isMesh && o.material) {
+      if (Array.isArray(o.material)) o.material.forEach(m => m.wireframe = wireframe);
+      else o.material.wireframe = wireframe;
+    }
+  });
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  camera.position.set(25, 20, 35);
+  controls.target.set(0, 25, 0);
+  controls.update();
+});
+
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') {
+    camera.position.set(25, 20, 35);
+    controls.target.set(0, 25, 0);
+    controls.update();
+  }
+});
+
+loading.style.display = 'none';
+
+// Animate
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
